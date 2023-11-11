@@ -1,12 +1,6 @@
 version: '3.4'
 
 services:
-  carlaACCsimulation:
-    image: carlaACCsimulation
-    build:
-      context: .
-      dockerfile: ./Dockerfile
-
   dev:
     image: simulation_dev
     build:
