@@ -8,7 +8,7 @@ import numpy as np
 # riduciamo un po le parole inutili
 class Context:
     def __init__(self):
-        self.client = carla.Client('172.17.0.1', 2000)
+        self.client = carla.Client('host.docker.internal', 2000)
         self.world = self.client.get_world()
 
 # testbench class
