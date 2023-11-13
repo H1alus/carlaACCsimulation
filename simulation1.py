@@ -14,55 +14,44 @@ class AutoSteer:
     def __init__(self, ego, route):
         self.ego = ego
         self.route = route
-        self.wpI = 0 
         self.prev_out = 0
+        self.pid = PID(1, 0, 0)
+        self.wps = []
+        self.wps = np.array([wp[0].transform.location for wp in self.route])
 
     def lookAhead(self):
-        ahead = 5
-        last_speed = self.ego.get_velocity()
-        last_speed = np.array([last_speed.x, last_speed.y, last_speed.z])
-        last_speed = np.sqrt(last_speed.dot(last_speed))
-        if last_speed > 10 and last_speed < 50:
-            ahead = 7
-        if last_speed >= 50:
-            ahead = 12
-        return self.route[self.wpI:self.wpI+ahead]
+        carLocation = self.ego.get_transform().location
+        car_v = np.array([carLocation.x, carLocation.y])
+        for wp in self.wps:
+            dist = np.array([wp.x - carLocation.x, wp.y - carLocation.y])
+            if dist.dot(car_v) >= 0:
+                idx = np.where(self.wps == wp)[0][0]
+                break
 
-    def delta_id(self, wpTransform):
+        return self.wps[idx:idx+5]
+
+    def delta_id(self, wp):
         carTransform = self.ego.get_transform()
         carVector = carTransform.location
-        wpV = wpTransform[0][0].transform.location
-        v = np.array([wpV.x - carVector.x, carVector.y - wpV.y])
+        carVector = np.array([carVector.x, carVector.y])
+        wp = wp[0]
+        wp = np.array([wp.x, wp.y])
+        v = np.array([wp[0] - carVector[0], wp[1] - carVector[1]])
         ld = np.sqrt(v.dot(v))
-        vnorm = np.array([v[0]/np.sqrt(v.dot(v)), v[1]/np.sqrt(v.dot(v))])
+        vnorm = np.array([v[0]/ld, v[1]/ld])
         
         carnorm = carTransform.get_forward_vector()
         carnorm = np.array([carnorm.x, carnorm.y])
-        alpha = np.arccos(carnorm.dot(vnorm))
+        alpha = np.arcsin((wp[1] - carVector[1])/ld)
         angle = -1*np.arctan(2*WHEELBASE*np.sin(alpha)/ld)
-        print('delta_id:', angle)
         return angle
-
-    def delta_ey(self, wpList):
-        carTransform = self.ego.get_transform()
-        P = 4
-
-        distances = np.array([carTransform.location.distance(wpT[0].transform.location) for wpT in wpList])
-        idx_min = np.argmin(distances)
-        print('idx_nearest:', idx_min)
-        distance = distances[idx_min]
-        print(distance)
-        return P*distance
 
     #equals to deltaT
     def angle(self):
         wpAhead = self.lookAhead()
         Delta_id = self.delta_id(wpAhead[-1:])
-        error = Delta_id + self.prev_out
-        pid = PID(10, 4, 0)
-        out = pid(error)
-        self.prev_out = out
-        return out
+        # print('DELTA_ID:', Delta_id)
+        return Delta_id
 
 
 ###############################################################################
