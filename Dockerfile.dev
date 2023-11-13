@@ -10,14 +10,30 @@ COPY requirements.txt /code/
 # More info: https://pip.pypa.io/en/stable/user_guide/
 RUN pip install -r requirements.txt
 
-# Setup SSH with secure root login
-RUN apt-get update \
-&& apt-get install -y openssh-server netcat \
-&& mkdir /var/run/sshd \
-&& echo 'root:password' | chpasswd \
-&& sed -i 's/\#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+# # Setup SSH with secure root login
+# RUN apt-get update \
+# && apt-get install -y openssh-server netcat \
+# && mkdir /var/run/sshd \
+# && echo 'root:password' | chpasswd \
+# && sed -i 's/\#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      bzip2 \
+      g++ \
+      git \
+      graphviz \
+      libgl1-mesa-glx \
+      libhdf5-dev \
+      openmpi-bin \
+      wget \
+      python3-tk && \
+    rm -rf /var/lib/apt/lists/*
+RUN (apt-get autoremove -y; \
+     apt-get autoclean -y)
+     
 WORKDIR /app
 COPY . /app
 
-CMD ["/usr/sbin/sshd", "-D"]
+ENV QT_X11_NO_MITSHM=1
+CMD ["bash"]
+#CMD ["/usr/sbin/sshd", "-D"]

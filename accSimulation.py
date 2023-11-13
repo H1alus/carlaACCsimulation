@@ -1,28 +1,31 @@
-# carlaACCsimulation, a simulator for ACC systems, built around CARLA simulator
-#     Copyright (C) 2023 Vittorio Folino Rocco Depietra Giuseppe Sansevero
-
-#     This program is free software; you can redistribute it and/or modify
-#     it under the terms of the GNU General Public License as published by
-#     the Free Software Foundation; either version 2 of the License, or
-#     (at your option) any later version.
-
-#     This program is distributed in the hope that it will be useful,
-#     but WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#     GNU General Public License for more details.
-
 import carla
 import time
 from threading import Thread, Event
 #import cv2
 import random
 import numpy as np
+import math
 
-# riduciamo un po le parole inutili
 class Context:
-    def __init__(self):
+    def __init__(self, simple=True):
+        if type(simple) != bool:
+            raise TypeError('simplify must be of type Bool')
+        
         self.client = carla.Client('host.docker.internal', 2000)
         self.world = self.client.get_world()
+        self.client.load_world('Town04')
+        self.settings = self.world.get_settings()
+        self.settings.synchronous_mode = True # Enables synchronous mode
+        self.settings.fixed_delta_seconds = 0.05
+        self.world.apply_settings(self.settings)
+
+        if simple:
+            self.simplify()
+
+    def simplify(self):
+        self.world.unload_map_layer(carla.MapLayer.Buildings)
+        self.world.unload_map_layer(carla.MapLayer.ParkedVehicles)
+        self.world.unload_map_layer(carla.MapLayer.Foliage)
 
 # testbench class
 class Simulation:
@@ -37,7 +40,7 @@ class Simulation:
         self._pos = pos
         self._followSimulation = Event()
         self._followSimulation.clear()
-        self._lead = _Lead(self._context, self._pos)
+        #self._lead = _Lead(self._context, self._pos)
         self._ego = _Ego(self._context, self._pos)
 
     def follow(self):
@@ -52,7 +55,8 @@ class Simulation:
             self._follow_thread.join()
     
     def start(self):
-       self._lead.init_engine() 
+       #self._lead.engine()
+       self._ego.engine() 
     
     def clean(self):
         #TODO a quanto pare i carla.Vehicle non sono distruttibili
@@ -76,9 +80,9 @@ class _Lead:
         self._vehicle = self._context.world.spawn_actor(random.choice(blueprints), self._pos)
 
     def destroy(self):
-        self._vehicle.DestroyActor()
+        self._vehicle.destroy()
 
-    def init_engine(self):
+    def engine(self):
         # questo mi permette di usare l'autopilot per l'automobile
         tm = self._context.client.get_trafficmanager(8000)
         tm_port = tm.get_port()
@@ -106,7 +110,7 @@ class _Ego:
     def destroy(self):
         #TODO su veicolo non funziona, forse distrugge solo sensori
         self._destroy_sensors()
-        self._ego.DestroyActor()
+        self._ego.destroy()
 
     # generalmente inutile ma mi da un buon wrap up della lista di sensori che abbiamo 
     def _init_sensors(self):
@@ -133,10 +137,32 @@ class _Ego:
         self._radar.stop()
 
     def _destroy_sensors(self):
-        self._camera.destroy
+        self._camera.destroy()
         self._radar.DestroyActor()
-
-
+    
+    def engine(self):
+        map = self._context.world.get_map()
+        def iter_control():
+            waypoint0 = map.get_waypoint(self._ego.get_location(),
+                                    project_to_road=True, 
+                                    lane_type=(carla.LaneType.Driving | 
+                                               carla.LaneType.Sidewalk))
+            while True:
+                waypoint1 = map.get_waypoint(self._ego.get_location(),
+                                        project_to_road=True, 
+                                        lane_type=(carla.LaneType.Driving | 
+                                                carla.LaneType.Sidewalk))
+                steer_angle = waypoint1.transform.get_right_vector(
+                ).get_vector_angle(waypoint0.transform.get_right_vector())
+                steer_angle = -1*steer_angle if not math.isnan(steer_angle) else 0
+                print(steer_angle)
+                waypoint0 = waypoint1
+                self._ego.apply_ackermann_control(carla.VehicleAckermannControl(
+                    speed = 10, acceleration = 50, steer=steer_angle))
+        
+        self._controlThread = Thread(target=iter_control, args=())
+        self._controlThread.start()
+    
     class _Camera:
         def __init__(self, up, context: Context):
             self._up = up

@@ -2,3 +2,7 @@
 carla
 numpy
 jupyterlab
+pygame
+opencv-python
+networkx
+simple-pid
