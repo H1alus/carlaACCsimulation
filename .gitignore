@@ -3,3 +3,4 @@ simulator/
 .vscode/
 .venv/
 .devcontainer/
+update.sh

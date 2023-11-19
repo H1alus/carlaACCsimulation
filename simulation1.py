@@ -1,15 +1,18 @@
 import carla
 import numpy as np
-import random
-import time
 import cv2
+import time
+import random
 from simple_pid import PID
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import tkinter as tk
 import sys
 import os
 sys.path.append(f'{os.getcwd()}/simulator/PythonAPI/carla') 
 from agents.navigation.global_route_planner import GlobalRoutePlanner
-WHEELBASE = 2.847
-
+from tracker import Tracker
 
 #adding params to display text to image
 font = cv2.FONT_HERSHEY_SIMPLEX
@@ -25,69 +28,61 @@ color = (255, 255, 255)
 # Line thickness of 2 px
 thickness = 1
 
-class AutoSteer:
-    def __init__(self, ego, route):
-        self.ego = ego
-        self.route = route
-        self.prev_out = 0
-        self.pid = PID(1.2, 2, 4)
-        self.idx = 0
-        self.wps = []
-        self.wps = np.array([wp[0].transform.location for wp in self.route])
+def update_line(data):
+    line.set_data(data[0], data[1])
+    return line,
 
-    def lookAhead(self):
-        carTransform = self.ego.get_transform()
-        carLocation = carTransform.location
-        carnorm = carTransform.get_forward_vector()
-        carnorm = np.array([carnorm.x, carnorm.y])
+def desired_speed(vehicle, speed):
+    """
+    convert speed (Km/h) to the throttle parameter
+    based on current speed
+    
+    ## parameteres:
+    vehicle: carla.Vehicle object, the vehicle to apply the 
 
-        for wp in self.wps:
-            dist = np.array([wp.x - carLocation.x, wp.y - carLocation.y])
-            distnorm = dist / np.array(np.sqrt(dist.dot(dist)))
-            if distnorm.dot(carnorm) >= 0:
-                idx = np.where(self.wps == wp)[0][0]
-                break
-        return self.wps[idx:idx+4]
+    speed: target speed we want to obtain
 
-    def delta_id(self, wp):
-        carTransform = self.ego.get_transform()
-        carVector = carTransform.location
-        carVector = np.array([carVector.x, carVector.y])
-        wp = wp[0]
-        wp = np.array([wp.x, wp.y])
-        v = np.array([wp[0] - carVector[0], wp[1] - carVector[1]])
-        ld = np.sqrt(v.dot(v))
-        vnorm = np.array([v[0]/ld, v[1]/ld])
-        
-        carnorm = carTransform.get_forward_vector()
-        carnorm = np.array([carnorm.x, carnorm.y])
-        alpha = np.arccos(carnorm.dot(vnorm))
-        angle = -1*np.arctan(2*WHEELBASE*np.sin(alpha)/ld)
-        # if np.abs(angle) > np.pi/4:
-        #     angle = np.sign(angle)*np.pi/4
-        return angle
-
-    #equals to deltaT
-    def angle(self):
-        wpAhead = self.lookAhead()
-        self.idx += 1
-        Delta_id = self.delta_id(wpAhead[-1:])
-        error = Delta_id - self.prev_out
-        out = self.pid(error)
-        self.prev_out = out
-        return out, wpAhead[-1:][0]
+    ## returns:
+    throttle: float - the required throttle to achieve the required speed
+    """
+    v = vehicle.get_velocity()
+    v = np.array([v.x, v.y, v.z])
+    v = np.sqrt(v.dot(v))
+    speed = speed/3.6
+    threshold = 1
+    if v <= speed - threshold:
+        return (speed - v + 1) % 2 + 1
+    elif v > speed:
+        return 0
+    else:
+        return 0.4
 
 
 ###############################################################################
 #context
 ###############################################################################
 client = carla.Client('host.docker.internal', 2000)
+client.load_world('Town04_Opt')
 world = client.get_world()
-client.load_world('Town04')
+world.unload_map_layer(carla.MapLayer.Buildings)
+world.unload_map_layer(carla.MapLayer.ParkedVehicles)
+#world.unload_map_layer(carla.MapLayer.Decals)
+world.unload_map_layer(carla.MapLayer.Foliage)
+
 pos = carla.Transform(carla.Location(x=402.784515, y=-149.542175, z=0.281942), 
                       carla.Rotation(pitch=0.000000, yaw=-89.401421, roll=0.000000))
-end_pos = carla.Transform(carla.Location(x=-4.865314, y=131.391022, z=1.029803), 
-                      carla.Rotation(pitch=-25.136202, yaw=88.529762, roll=0.000025))
+# end_pos = carla.Transform(carla.Location(x=-4.865314, y=131.391022, z=1.029803), 
+#                       carla.Rotation(pitch=-25.136202, yaw=88.529762, r
+#adding params to display text to image
+font = cv2.FONT_HERSHEY_SIMPLEX
+# org - defining lines to display telemetry values on the screen
+org = (30, 30) # this line will be used to show current speed
+org2 = (30, 50) # this line will be used for future steering angle
+org3 = (30, 70) # and another line for future telemetry outputs
+org4 = (30, 90) # and another line for future telemetry outputs
+org3 = (30, 110) # and another line for future telemetry outputsoll=0.000025))
+end_pos = carla.Transform(carla.Location(x=-391.342010, y=26.208113, z=1.766472), 
+                          carla.Rotation(pitch=-7.819187, yaw=0.168475, roll=0.000083))
 spawn_points = world.get_map().get_spawn_points()
 ###############################################################################
 #ego vehicle
@@ -116,14 +111,17 @@ image_h = camera_bp.get_attribute('image_size_y').as_int()
 camera_data = {'image': np.zeros((image_h,image_w,4))}
 # this actually opens a live stream from the camera
 camera.listen(lambda image: camera_callback(image,camera_data))
-cv2.namedWindow('RGB Camera',cv2.WINDOW_AUTOSIZE)
-cv2.imshow('RGB Camera',camera_data['image'])
+cv2.namedWindow('control view',cv2.WINDOW_AUTOSIZE)
+cv2.imshow('control view',camera_data['image'])
 ###############################################################################
 #route planning
 ###############################################################################
 sampling_resolution = 1
 grp = GlobalRoutePlanner(world.get_map(), sampling_resolution)
-route = grp.trace_route(pos.location, end_pos.location)
+first_half = grp.trace_route(pos.location, end_pos.location)
+grp = GlobalRoutePlanner(world.get_map(), sampling_resolution)
+second_half = grp.trace_route(end_pos.location, pos.location)[:-1]
+route = first_half + second_half
 #draw the route in sim window - Note it does not get into the camera of the car
 for waypoint in route:
     world.debug.draw_string(waypoint[0].transform.location, '^', draw_shadow=False,
@@ -132,18 +130,34 @@ for waypoint in route:
 ###############################################################################
 #main loop
 ###############################################################################
-autosteer = AutoSteer(ego, route)
-ego.apply_ackermann_control(carla.VehicleAckermannControl(speed=10, acceleration=1000, 
-                                               steer=0))
-for wp_i in range(len(route)):
+tracker = Tracker(ego, route)
+ego.apply_control(carla.VehicleControl(throttle=0.2, steer=0))
+spectator = world.get_spectator()
+data = ([],[])
+while True:
+    start = time.time()
     # Carla Tick
     world.tick()
+    # exit by pressing q
     if cv2.waitKey(1) == ord('q'):
         quit = True
         break
+    # egoTransform = ego.get_transform()
+    # egoLocation = egoTransform.location
+    # data[0].append(egoLocation.x)
+    # data[1].append(egoLocation.y)
     image = camera_data['image']
-    angle, curr_wp = autosteer.angle()
-    image = cv2.putText(image, 'Next waypoint: '+str(curr_wp), org2, font, fontScale, color, thickness, cv2.LINE_AA)
-    ego.apply_ackermann_control(carla.VehicleAckermannControl(speed=30, acceleration=100, 
-                                               steer=angle))
-    cv2.imshow('RGB Camera',image)
+    v = ego.get_velocity()
+    v = np.array([v.x, v.y, v.z])
+    v = np.sqrt(v.dot(v))*3.6
+    image = cv2.putText(
+                        image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h', (30, 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        fontScale, color, 
+                        thickness, cv2.LINE_AA
+                        )
+    speeds = [50, 70, 80, 90]
+    ego.apply_control(carla.VehicleControl(throttle=desired_speed(ego, 50), steer=tracker.keepTrack()))
+    cv2.imshow('control view',image)
+    end = time.time()
+    time.sleep(max(0.05 - (end - start), 0))
