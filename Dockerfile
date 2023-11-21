@@ -1,25 +1,31 @@
-# For more information, please refer to https://aka.ms/vscode-docker-python
 FROM python:3.8-bullseye
+ENV PYTHONUNBUFFERED 1
 
-# Keeps Python from generating .pyc files in the container
-ENV PYTHONDONTWRITEBYTECODE=1
+WORKDIR /code
 
-# Turns off buffering for easier container logging
-ENV PYTHONUNBUFFERED=1
+# Copying the requirements, this is needed because at this point the volume isn't mounted yet
+COPY requirements.txt /code/
 
-# Install pip requirements
-COPY requirements.txt .
-RUN python -m pip install -r requirements.txt
+# Installing requirements, if you don't use this, you should.
+# More info: https://pip.pypa.io/en/stable/user_guide/
+RUN pip install -r requirements.txt
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      bzip2 \
+      g++ \
+      git \
+      graphviz \
+      libgl1-mesa-glx \
+      libhdf5-dev \
+      openmpi-bin \
+      wget \
+      python3-tk && \
+    rm -rf /var/lib/apt/lists/*
+RUN (apt-get autoremove -y; \
+     apt-get autoclean -y)
+     
 WORKDIR /app
 COPY . /app
 
-# Creates a non-root user with an explicit UID and adds permission to access the /app folder
-# For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
-RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
-USER appuser
-EXPOSE 2000
-EXPOSE 9090
-# During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
+ENV QT_X11_NO_MITSHM=1
 CMD ["python", "main.py"]
-

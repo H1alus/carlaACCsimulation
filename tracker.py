@@ -8,13 +8,11 @@ class Tracker:
     The steer method uses the Stanley auto steering
     """
     WHEELBASE = 2.847
+    
     def __init__(self, vehicle : carla.Vehicle, route):
         # in the context of this class the vehicle becomes our ego
         self.ego = vehicle
         self.wps = np.array([wp[0].transform for wp in route])
-        #self.integral = 0
-        #self.prev_error = 0
-        #self.prev_angle = 0
 
     def closestPoint(self):
         """
@@ -46,32 +44,22 @@ class Tracker:
         angle: float limited in interval [-1, 1]
         """
         Kp = 3.4
-        # Ku = 3.4
-        # Tu = 1
-        # Kp = 0.6*Ku
-        # Ki = 2 * Kp/Tu
-        # Kd = Kp*Tu/8
         y, cPoint = self.closestPoint()
-        delta = np.deg2rad(cPoint.rotation.yaw)
+        desired = np.deg2rad(cPoint.rotation.yaw)
         theta = np.deg2rad(self.ego.get_transform().rotation.yaw)
-        sigma = np.angle(np.exp(1j * (theta - delta)))
+        sigma = np.angle(np.exp(1j * (theta - desired)))
         v = self.ego.get_velocity()
         v = np.array([v.x, v.y, v.z])
         v = np.sqrt(v.dot(v))
-        v_st = v/np.cos(delta)
-        y_st = y + sigma*AutoSteer.WHEELBASE
-        #proportional = Kp * y_st
-        # self.integral += y_st
-        # integral = Ki * self.integral
-        # derivative = Kd * (y_st - self.prev_error)
-        # self.prev_error = y_st
-        # PID = proportional + integral + derivative
+        v_st = v/np.cos(desired)
+        y_st = y + sigma*Tracker.WHEELBASE 
         delta = -(sigma + np.arctan(Kp * y_st/(v_st + 1e-3)))
         delta = ((delta + 1) % 2) - 1
         return delta
     
     def keepTrack(self):
         Kp = 3.4
+        step = 0.1
         y, cPoint = self.closestPoint()
         delta = np.deg2rad(cPoint.rotation.yaw)
         theta = np.deg2rad(self.ego.get_transform().rotation.yaw)
@@ -82,9 +70,48 @@ class Tracker:
         v_st = v/np.cos(delta)
         y_st = y + sigma*Tracker.WHEELBASE
         delta = -(sigma + np.arctan(Kp * y_st/(v_st + 1e-3)))
-        delta = ((delta + 1) % 2) - 1
-        update_step = 0.1
         egoTransform = self.ego.get_transform()
-        egoTransform.location = egoTransform.location + update_step * (cPoint.location - egoTransform.location)
+        egoTransform.location = egoTransform.location + step * (cPoint.location - egoTransform.location)
         self.ego.set_transform(egoTransform)
+        delta = ((delta + 1) % 2) - 1
         return delta
+    
+    def desired_speed(self,speed):
+        """
+        convert speed (Km/h) to the throttle parameter
+        based on current speed
+
+        ## parameteres:
+        vehicle: carla.Vehicle object, the vehicle to apply the 
+
+        speed: target speed we want to obtain
+
+        ## returns:
+        throttle: float - the required throttle to achieve the required speed
+        """
+        v = self.ego.get_velocity()
+        v = np.array([v.x, v.y, v.z])
+        v = np.sqrt(v.dot(v))
+        threshold = 1
+        _, cPoint = self.closestPoint()
+        idx = self.wps.tolist().index(cPoint)
+
+        def speeding(speed):
+            if v <= speed - threshold:
+                throttle = 0.9
+                brake = 0
+            elif v > speed:
+                throttle = 0
+                brake = max(((v - speed + 1) % 2) + 1 - 0.3, 0)
+            else:
+                throttle = 0.4
+                brake = 0
+
+
+            return throttle, brake
+    
+        if np.abs(np.angle(np.exp(1j*np.deg2rad(cPoint.rotation.yaw))) - np.angle(
+            np.exp(1j*np.deg2rad(self.wps[(idx + 15)%len(self.wps)].rotation.yaw)))) > 1e-2:
+            return speeding(16.67)
+        else:
+            return speeding(speed/3.6)
