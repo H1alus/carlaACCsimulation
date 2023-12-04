@@ -40,24 +40,9 @@ ego = world.spawn_actor(ego_bp, ego_spawn)
 ###############################################################################
 #visualization camera
 ###############################################################################
-camera_bp = world.get_blueprint_library().find('sensor.camera.rgb')
-camera_bp.set_attribute('image_size_x', '640')
-camera_bp.set_attribute('image_size_y', '360')
-camera_init_trans = carla.Transform(carla.Location(z=3,x=-10))
-#this creates the camera in the sim
-camera = world.spawn_actor(camera_bp,camera_init_trans,attach_to=ego)
-
-def camera_callback(image,data_dict):
-    data_dict['image'] = np.reshape(np.copy(image.raw_data),(image.height,image.width,4))
-
-image_w = camera_bp.get_attribute('image_size_x').as_int()
-image_h = camera_bp.get_attribute('image_size_y').as_int()
-
-camera_data = {'image': np.zeros((image_h,image_w,4))}
-# this actually opens a live stream from the camera
-camera.listen(lambda image: camera_callback(image,camera_data))
-cv2.namedWindow('control view',cv2.WINDOW_AUTOSIZE)
-cv2.imshow('control view',camera_data['image'])
+from stereoCamera import StereoCamera
+stereocam = StereoCamera(world, ego)
+stereocam.listen()
 ###############################################################################
 #route planning
 ###############################################################################
@@ -68,9 +53,6 @@ grp = GlobalRoutePlanner(world.get_map(), sampling_resolution)
 second_half = grp.trace_route(end_pos.location, pos.location)[:-1]
 route = first_half + second_half
 data = ([x[0].transform.location.x for x in route], [y[0].transform.location.y for y in route])
-plt.plot(data[0], data[1])
-plt.ion()
-plt.show()
 # for waypoint in route:
 #     world.debug.draw_string(waypoint[0].transform.location, '^', draw_shadow=False,
 #         color=carla.Color(r=0, g=0, b=255), life_time=600.0,
@@ -88,20 +70,19 @@ def run():
         # exit by pressing q
         if cv2.waitKey(1) == ord('q'):
             break
-        image = camera_data['image']
         v = ego.get_velocity()
         v = np.array([v.x, v.y, v.z])
         v = np.sqrt(v.dot(v))*3.6
         angle = tracker.keepTrack()
         throttle, brake = tracker.desired_speed(130)
-        image = cv2.putText(
+        """image = cv2.putText(
                             image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h', (30, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (255, 255, 255), 
                             1, cv2.LINE_AA
-                            )
+                            )"""
+        stereocam.update()
         ego.apply_control(carla.VehicleControl(throttle=throttle, steer=angle, brake=brake))
-        cv2.imshow('control view', image)
-        plt.pause(0.01)
+
 if __name__ == "__main__":
     run()
