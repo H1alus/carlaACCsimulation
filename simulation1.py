@@ -8,12 +8,13 @@ sys.path.append(f'{os.getcwd()}/simulator/PythonAPI/carla')
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 import matplotlib.pyplot as plt
 from tracker import Tracker
+from stereoCamera import StereoCamera
 
 
 ###############################################################################
 #context
 ###############################################################################
-client = carla.Client('host.docker.internal', 2000)
+client = carla.Client('localhost', 2000)
 client.load_world('Town04_Opt')
 world = client.get_world()
 world.unload_map_layer(carla.MapLayer.Buildings)
@@ -40,9 +41,9 @@ ego = world.spawn_actor(ego_bp, ego_spawn)
 ###############################################################################
 #visualization camera
 ###############################################################################
-from stereoCamera import StereoCamera
 stereocam = StereoCamera(world, ego)
 stereocam.listen()
+cv2.namedWindow('control view',cv2.WINDOW_AUTOSIZE)
 ###############################################################################
 #route planning
 ###############################################################################
@@ -75,13 +76,14 @@ def run():
         v = np.sqrt(v.dot(v))*3.6
         angle = tracker.keepTrack()
         throttle, brake = tracker.desired_speed(130)
-        """image = cv2.putText(
+        image = stereocam.update()
+        image = cv2.putText(
                             image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h', (30, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (255, 255, 255), 
                             1, cv2.LINE_AA
-                            )"""
-        stereocam.update()
+                            )
+        cv2.imshow('control view', image)
         ego.apply_control(carla.VehicleControl(throttle=throttle, steer=angle, brake=brake))
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 import carla
-import cv2
 import numpy as np
 
 class StereoCamera:
@@ -31,8 +30,6 @@ class StereoCamera:
         # this actually opens a live stream from the camera
         self.camera1.listen(lambda image: camera1_callback(image))
         self.camera2.listen(lambda image: camera2_callback(image))
-        cv2.namedWindow('control view',cv2.WINDOW_AUTOSIZE)
 
     def update(self):
-        camera_data = np.hstack((self.camera1_data, self.camera2_data))
-        cv2.imshow('control view', camera_data)
+        return np.hstack((self.camera1_data, self.camera2_data))
