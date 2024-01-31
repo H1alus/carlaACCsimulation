@@ -33,3 +33,6 @@ class StereoCamera:
 
     def update(self):
         return np.hstack((self.camera1_data, self.camera2_data))
+
+    def getCamera1(self):
+        return self.camera1_data

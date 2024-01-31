@@ -9,6 +9,7 @@ from agents.navigation.global_route_planner import GlobalRoutePlanner
 import matplotlib.pyplot as plt
 from tracker import Tracker
 from stereoCamera import StereoCamera
+from radar import Radar
 
 
 ###############################################################################
@@ -45,6 +46,11 @@ stereocam = StereoCamera(world, ego)
 stereocam.listen()
 cv2.namedWindow('control view',cv2.WINDOW_AUTOSIZE)
 ###############################################################################
+# radar
+###############################################################################
+radar = Radar(world, ego)
+radar.listen()
+###############################################################################
 #route planning
 ###############################################################################
 sampling_resolution = 1
@@ -76,7 +82,9 @@ def run():
         v = np.sqrt(v.dot(v))*3.6
         angle = tracker.keepTrack()
         throttle, brake = tracker.desired_speed(130)
-        image = stereocam.update()
+        
+        radar_data = radar.update()
+        image = stereocam.getCamera1()
         image = cv2.putText(
                             image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h', (30, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX,
@@ -84,6 +92,7 @@ def run():
                             1, cv2.LINE_AA
                             )
         cv2.imshow('control view', image)
+        print(radar_data)
         ego.apply_control(carla.VehicleControl(throttle=throttle, steer=angle, brake=brake))
 
 if __name__ == "__main__":
