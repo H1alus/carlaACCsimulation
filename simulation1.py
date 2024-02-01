@@ -11,7 +11,6 @@ from tracker import Tracker
 from stereoCamera import StereoCamera
 from radar import Radar
 
-
 ###############################################################################
 #context
 ###############################################################################
@@ -49,6 +48,8 @@ cv2.namedWindow('control view',cv2.WINDOW_AUTOSIZE)
 # radar
 ###############################################################################
 radar = Radar(world, ego)
+#use listen_debug() to show radar points (cameras see this points too)
+#radar.listen_debug()
 radar.listen()
 ###############################################################################
 #route planning
@@ -84,7 +85,8 @@ def run():
         throttle, brake = tracker.desired_speed(130)
         
         radar_data = radar.update()
-        image = stereocam.getCamera1()
+        image = stereocam.update()
+
         image = cv2.putText(
                             image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h', (30, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX,
