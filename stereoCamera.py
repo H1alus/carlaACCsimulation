@@ -23,8 +23,8 @@ class StereoCamera:
     gamma = 2.2
     sensor_tick = 0
     
-    def __init__(self, world, ego):
-
+    def __init__(self, world, ego, mode="rgba"):
+        
         camera_bp = world.get_blueprint_library().find('sensor.camera.rgb')
         camera_bp.set_attribute('image_size_x', str(StereoCamera.image_size_x))
         camera_bp.set_attribute('image_size_y', str(StereoCamera.image_size_y)) 
@@ -48,6 +48,12 @@ class StereoCamera:
 
         self.camera1 = world.spawn_actor(camera_bp,camera1_init_trans,attach_to=ego)
         self.camera2 = world.spawn_actor(camera_bp,camera2_init_trans,attach_to=ego) 
+        if mode=="rgba":
+            self._slice = None
+        elif mode=="rgb":
+            self._slice = 3 
+        else:
+            raise Exception("modes allowed for stereocamera are rgb and rgba")
 
         self.camera1_data = np.zeros((StereoCamera.image_size_y, StereoCamera.image_size_x,4))
         self.camera2_data = np.zeros((StereoCamera.image_size_y, StereoCamera.image_size_x,4))
@@ -63,7 +69,10 @@ class StereoCamera:
         self.camera2.listen(lambda image: camera2_callback(image))
 
     def update(self):
-        return np.hstack((self.camera1_data, self.camera2_data))
+        return np.hstack((self.camera1_data[:,:,:self._slice], self.camera2_data[:,:,:self._slice]))
 
     def getCamera1(self):
-        return self.camera1_data
+        return self.camera1_data[:,:,:self._slice]
+    
+    def getCamera2(self):
+        return self.camera2_data[:,:,:self._slice]

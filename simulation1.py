@@ -3,18 +3,18 @@ import numpy as np
 import cv2
 import sys
 import os
-import random
+import time
 sys.path.append(f'{os.getcwd()}/simulator/PythonAPI/carla') 
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 import matplotlib.pyplot as plt
 from tracker import Tracker
 from stereoCamera import StereoCamera
 from radar import Radar
-
 ###############################################################################
 #context
 ###############################################################################
 client = carla.Client('localhost', 2000)
+time.sleep(5)
 client.load_world('Town04_Opt')
 world = client.get_world()
 world.unload_map_layer(carla.MapLayer.Buildings)
@@ -41,7 +41,8 @@ ego = world.spawn_actor(ego_bp, ego_spawn)
 ###############################################################################
 #visualization camera
 ###############################################################################
-stereocam = StereoCamera(world, ego)
+# mode selects between rgb matrix and rgba matrix
+stereocam = StereoCamera(world, ego, mode="rgb")
 stereocam.listen()
 cv2.namedWindow('control view',cv2.WINDOW_AUTOSIZE)
 ###############################################################################
@@ -70,11 +71,16 @@ data = ([x[0].transform.location.x for x in route], [y[0].transform.location.y f
 ###############################################################################
 def run():
     tracker = Tracker(ego, route)
+    # we need initial speed for the auto-steering to be effective
     throttle,_ = tracker.desired_speed(10)
     ego.apply_control(carla.VehicleControl(throttle=throttle, steer=0))
+    old_time = 0
     while True:
         # Carla Tick
         world.tick()
+        new_time = time.time()
+        fps = int(1/(new_time - old_time))
+        old_time = new_time
         # exit by pressing q
         if cv2.waitKey(1) == ord('q'):
             break
@@ -88,13 +94,13 @@ def run():
         image = stereocam.update()
 
         image = cv2.putText(
-                            image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h', (30, 30), 
+                            image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h' + "  fps: " + str(fps), (30, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX,
-                            0.5, (255, 255, 255), 
-                            1, cv2.LINE_AA
+                            0.5, (0, 255, 0), 
+                            2, cv2.LINE_AA
                             )
         cv2.imshow('control view', image)
-        print(radar_data)
+        #print(radar_data)
         ego.apply_control(carla.VehicleControl(throttle=throttle, steer=angle, brake=brake))
 
 if __name__ == "__main__":
