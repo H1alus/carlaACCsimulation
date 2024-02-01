@@ -11,6 +11,11 @@ class Radar:
     RANGE = 100
     SENSOR_TICK = 0
 
+    RADAR_HEIGHT = 1
+    # X AXIS
+    RADAR_FORWARD_DISPLACEMENT = 2.8
+    RADAR_PITCH = 5 # rad (?)
+
     def __init__(self, world, ego):
         self.world = world
         radar_bp = world.get_blueprint_library().find("sensor.other.radar")
@@ -19,7 +24,9 @@ class Radar:
         radar_bp.set_attribute('range', str(Radar.RANGE)) 
         radar_bp.set_attribute("points_per_second", str(Radar.POINTS_PER_SECOND))
         radar_bp.set_attribute("sensor_tick", str(Radar.SENSOR_TICK))
-        radar_init_trans = carla.Transform(carla.Location(x=2.8, z=1.0), carla.Rotation(pitch=5))
+        radar_init_trans = carla.Transform(carla.Location(x=Radar.RADAR_FORWARD_DISPLACEMENT, 
+                                                          z=Radar.RADAR_HEIGHT), 
+                                                          carla.Rotation(pitch=Radar.RADAR_PITCH))
         self._radar = world.spawn_actor(radar_bp, radar_init_trans, attach_to=ego,attachment_type = carla.AttachmentType.Rigid )
         self._radar_data = None
     
