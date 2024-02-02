@@ -34,12 +34,10 @@ class connecter(threading.Thread):
     def getVelocity(self):
         if not self._recvQueue.empty():
             self._heldVelocity = self._recvQueue.get()
-            print("got vel")
         return self._heldVelocity
 
 
     def sender(self):
-        packet_type = {"v": 0, "f": 1, "r": 2}
         while True:
             self.sendDataEvent.wait()
             data = self._senderQueue.get()

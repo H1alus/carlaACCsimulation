@@ -12,34 +12,34 @@ from queue import Queue
 class CarlaClient(threading.Thread):
     def __init__(self, server: str, port:int):
         super().__init__()
-        self.c_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_addr = (server, port)
-        self._senderQueue = Queue()
+        self._c_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_addr = (server, port)
+        self.__senderQueue = Queue()
         self._recvQueue = Queue()
-        self.senderEvent = threading.Event()
+        self._senderEvent = threading.Event()
 
-    def connect(self):
-        self.c_sock.connect(self.server_addr)
+    def _connect(self):
+        self._c_sock.connect(self._server_addr)
 
     def sendVelocity(self, velocity : int):
-        self._senderQueue.put(velocity)
-        self.senderEvent.set()
+        self.__senderQueue.put(velocity)
+        self._senderEvent.set()
 
-    def sender(self):
+    def _sender(self):
         while True:
-            self.senderEvent.wait()
-            data = self._senderQueue.get()
-            self.c_sock.send(data.to_bytes(4, byteorder="big"))
-            self.senderEvent.clear()
+            self._senderEvent.wait()
+            data = self.__senderQueue.get()
+            self._c_sock.send(data.to_bytes(4, byteorder="big"))
+            self._senderEvent.clear()
     
-    def receiver(self):
+    def _receiver(self):
         while True:
-            to_read = self.c_sock.recv(4)
+            to_read = self._c_sock.recv(4)
             data_length = int.from_bytes(to_read, byteorder="big")
 
             data = b''
             while len(data) < data_length:
-                packet = self.c_sock.recv(min(data_length - len(data), 4096))
+                packet = self._c_sock.recv(min(data_length - len(data), 4096))
                 if not packet:
                     raise RuntimeError("connection is broken")
                 data += packet
@@ -58,9 +58,9 @@ class CarlaClient(threading.Thread):
         return lastData
 
     def run(self):
-        self.connect()
-        recv = threading.Thread(target=self.receiver)
-        sendr = threading.Thread(target=self.sender)
+        self._connect()
+        recv = threading.Thread(target=self._receiver)
+        sendr = threading.Thread(target=self._sender)
         recv.start()
         sendr.start()
         recv.join()
