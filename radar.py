@@ -1,32 +1,26 @@
 import carla
 import numpy as np
 import math
+import sys
+import os
+sys.path.append(f'{os.getcwd()}/..') 
+from sensorsP import RadarP
 
 class Radar:
     # documentation can be found at:
     # https://carla.readthedocs.io/en/latest/ref_sensors/#radar-sensor
-    POINTS_PER_SECOND = 1500 # deve essere ridotto
-    HORIZZONTAL_FOV = 30
-    VERTICAL_FOV =  30
-    RANGE = 100
-    SENSOR_TICK = 0
-
-    RADAR_HEIGHT = 1
-    # X AXIS
-    RADAR_FORWARD_DISPLACEMENT = 2.8
-    RADAR_PITCH = 5 # rad (?)
 
     def __init__(self, world, ego):
         self.world = world
         radar_bp = world.get_blueprint_library().find("sensor.other.radar")
-        radar_bp.set_attribute('horizontal_fov', str(Radar.HORIZZONTAL_FOV))
-        radar_bp.set_attribute('vertical_fov', str(Radar.VERTICAL_FOV))
-        radar_bp.set_attribute('range', str(Radar.RANGE)) 
-        radar_bp.set_attribute("points_per_second", str(Radar.POINTS_PER_SECOND))
-        radar_bp.set_attribute("sensor_tick", str(Radar.SENSOR_TICK))
-        radar_init_trans = carla.Transform(carla.Location(x=Radar.RADAR_FORWARD_DISPLACEMENT, 
-                                                          z=Radar.RADAR_HEIGHT), 
-                                                          carla.Rotation(pitch=Radar.RADAR_PITCH))
+        radar_bp.set_attribute('horizontal_fov', str(RadarP.HORIZZONTAL_FOV))
+        radar_bp.set_attribute('vertical_fov', str(RadarP.VERTICAL_FOV))
+        radar_bp.set_attribute('range', str(RadarP.RANGE)) 
+        radar_bp.set_attribute("points_per_second", str(RadarP.POINTS_PER_SECOND))
+        radar_bp.set_attribute("sensor_tick", str(RadarP.SENSOR_TICK))
+        radar_init_trans = carla.Transform(carla.Location(x=RadarP.RADAR_FORWARD_DISPLACEMENT, 
+                                                          z=RadarP.RADAR_HEIGHT), 
+                                                          carla.Rotation(pitch=RadarP.RADAR_PITCH))
         self._radar = world.spawn_actor(radar_bp, radar_init_trans, attach_to=ego,attachment_type = carla.AttachmentType.Rigid )
         self._radar_data = None
     

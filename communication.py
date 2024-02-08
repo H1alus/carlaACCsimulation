@@ -43,13 +43,14 @@ class connecter(threading.Thread):
             data = self._senderQueue.get()
             im = Image.fromarray(data["f"])
             im_stream = io.BytesIO()
-            im.save(im_stream, format="JPEG", quality=95)
+            im.save(im_stream, format="JPEG", quality=100)
             data["f"] = base64.b64encode(im_stream.getvalue()).decode("utf-8")
             data["r"] = data["r"].tolist()
             packet = json.dumps(data)
             self.connection.send(len(packet).to_bytes(4, byteorder="big"))
             self.connection.send(packet.encode())
             self.sendDataEvent.clear()
+            time.sleep(0.020)
 
     def receiver(self):
         while True:
