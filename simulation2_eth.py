@@ -10,6 +10,12 @@ import matplotlib.pyplot as plt
 from tracker import Tracker
 from stereoCamera import StereoCamera
 from radar import Radar
+import random
+from communication import connecter
+###############################################################################
+# communication thread
+con = connecter()
+con.start()
 ###############################################################################
 #context
 ###############################################################################
@@ -31,10 +37,21 @@ end_pos = carla.Transform(carla.Location(x=-391.342010, y=26.208113, z=1.766472)
                           carla.Rotation(pitch=-7.819187, yaw=0.168475, roll=0.000083))
 spawn_points = world.get_map().get_spawn_points()
 ###############################################################################
+#Lead vehicle
+###############################################################################
+world.tick()
+models = ['dodge', 'audi', 'model3', 'mini', 'mustang', 'lincoln', 'prius', 'nissan', 'crown', 'impala']
+blueprints = []
+for vehicle in world.get_blueprint_library().filter('*vehicle*'):
+    if any(model in vehicle.id for model in models):
+        blueprints.append(vehicle)
+
+lead = world.spawn_actor(random.choice(blueprints), pos)
+###############################################################################
 #ego vehicle
 ###############################################################################
 ego_spawn = pos
-#ego_spawn.location -= 10*(pos.get_forward_vector())
+ego_spawn.location -= 10*(pos.get_forward_vector())
 ego_bp = world.get_blueprint_library().find('vehicle.lincoln.mkz_2020')
 ego_bp.set_attribute('role_name', 'hero')
 ego = world.spawn_actor(ego_bp, ego_spawn)
@@ -70,11 +87,21 @@ data = ([x[0].transform.location.x for x in route], [y[0].transform.location.y f
 #main loop
 ###############################################################################
 def run():
+
+    track_lead = Tracker(lead, route)
     tracker = Tracker(ego, route)
     # we need initial speed for the auto-steering to be effective
-    throttle,_ = tracker.desired_speed(10)
+    vel = con.getVelocity()
+    while vel <=10:
+        vel = con.getVelocity()
+        time.sleep(0.05)
+    throttle,_ = tracker.desired_speed(vel)
+    lead.apply_control(carla.VehicleControl(throttle=throttle, steer=0))
+    time.sleep(2)
     ego.apply_control(carla.VehicleControl(throttle=throttle, steer=0))
     old_time = 0
+    lead_vel = 40
+    change_count = 0
     while True:
         # Carla Tick
         world.tick()
@@ -88,11 +115,11 @@ def run():
         v = np.array([v.x, v.y, v.z])
         v = np.sqrt(v.dot(v))*3.6
         angle = tracker.keepTrack()
-        throttle, brake = tracker.desired_speed(40)
+        throttle, brake = tracker.desired_speed(con.getVelocity())
         
         radar_data = radar.update()
         image = stereocam.update()
-
+        con.sendData(v, image, radar_data)
         image = cv2.putText(
                             image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h' + "  fps: " + str(fps), (30, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX,
@@ -101,7 +128,16 @@ def run():
                             )
         cv2.imshow('control view', image)
         #print(radar_data)
+        change_count += 1
+        if change_count == 300:
+            change_count = 0
+            if np.random.randint(2) == 1:
+                lead_vel = np.random.randint(40,131)
+        angle_lead = track_lead.keepTrack()
+        throttle_lead, brake_lead = track_lead.desired_speed(lead_vel)
+        lead.apply_control(carla.VehicleControl(throttle=throttle_lead, steer=angle_lead, brake=brake_lead))
         ego.apply_control(carla.VehicleControl(throttle=throttle, steer=angle, brake=brake))
+        time.sleep(0.01)
 
 if __name__ == "__main__":
     run()

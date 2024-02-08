@@ -58,6 +58,15 @@ class Tracker:
         return delta
     
     def keepTrack(self):
+        """
+        Applies both the steering from stanley and the ability to keep the car
+        on the center of the track
+        ## parameters:
+        None
+
+        ## returns:
+        steering angle (rad)
+        """
         Kp = 3.4
         step = 0.1
         y, cPoint = self.closestPoint()
@@ -92,15 +101,14 @@ class Tracker:
         v = self.ego.get_velocity()
         v = np.array([v.x, v.y, v.z])
         v = np.sqrt(v.dot(v))
-        threshold = 1
         _, cPoint = self.closestPoint()
         idx = self.wps.tolist().index(cPoint)
 
         def speeding(speed):
-            if v <= speed - threshold:
+            if v < speed:
                 throttle = 0.9
                 brake = 0
-            elif v > speed:
+            elif v > speed + 0.166666667:
                 throttle = 0
                 brake = max(((v - speed + 1) % 2) + 1 - 0.3, 0)
             else:
@@ -109,9 +117,8 @@ class Tracker:
 
 
             return throttle, brake
-    
-        if np.abs(np.angle(np.exp(1j*np.deg2rad(cPoint.rotation.yaw))) - np.angle(
-            np.exp(1j*np.deg2rad(self.wps[(idx + 15)%len(self.wps)].rotation.yaw)))) > 1e-2:
-            return speeding(16.67)
-        else:
-            return speeding(speed/3.6)
+        if speed > 60:
+            if np.abs(np.angle(np.exp(1j*np.deg2rad(cPoint.rotation.yaw))) - np.angle(
+                np.exp(1j*np.deg2rad(self.wps[(idx + 15)%len(self.wps)].rotation.yaw)))) > 1e-2:
+                return speeding(16.67)
+        return speeding(speed/3.6)

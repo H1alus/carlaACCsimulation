@@ -79,8 +79,9 @@ def run():
     tracker = Tracker(ego, route)
     # we need initial speed for the auto-steering to be effective
     vel = con.getVelocity()
-    #while vel < 10:
-       # vel = con.getVelocity()
+    while vel <=10:
+        vel = con.getVelocity()
+        time.sleep(0.5)
     throttle,_ = tracker.desired_speed(vel)
     ego.apply_control(carla.VehicleControl(throttle=throttle, steer=0))
     old_time = 0
