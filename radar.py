@@ -13,7 +13,7 @@ class Radar:
     def __init__(self, world, ego):
         self.world = world
         radar_bp = world.get_blueprint_library().find("sensor.other.radar")
-        radar_bp.set_attribute('horizontal_fov', str(RadarP.HORIZZONTAL_FOV))
+        radar_bp.set_attribute('horizontal_fov', str(RadarP.HORIZONTAL_FOV))
         radar_bp.set_attribute('vertical_fov', str(RadarP.VERTICAL_FOV))
         radar_bp.set_attribute('range', str(RadarP.RANGE)) 
         radar_bp.set_attribute("points_per_second", str(RadarP.POINTS_PER_SECOND))
@@ -51,8 +51,8 @@ class Radar:
                 b = int(abs(clamp(- 1.0, 0.0, - 1.0 - norm_velocity)) * 255.0)
                 self.world.debug.draw_point(
                     radar_data.transform.location + fw_vec,
-                    size=0.075,
-                    life_time=0.06,
+                    size=0.05,
+                    life_time=0.02,
                     persistent_lines=False,
                     color=carla.Color(r, g, b))
                 self._radar_data[i] = (detect.depth, detect.azimuth, detect.altitude, norm_velocity*3.6)
