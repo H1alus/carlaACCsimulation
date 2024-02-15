@@ -4,13 +4,15 @@ import cv2
 import sys
 import os
 import time
+import random
 sys.path.append(f'{os.getcwd()}/simulator/PythonAPI/carla') 
 from agents.navigation.global_route_planner import GlobalRoutePlanner
-import matplotlib.pyplot as plt
 from tracker import Tracker
 from stereoCamera import StereoCamera
+from sensorsP import RadarP
 from radar import Radar
-import random
+from spherical_math import Spherical_math
+
 ###############################################################################
 #context
 ###############################################################################
@@ -61,8 +63,10 @@ cv2.namedWindow('control view',cv2.WINDOW_AUTOSIZE)
 # radar
 ###############################################################################
 radar = Radar(world, ego)
+#use listen_debug_ground_remove() to show radar points in the ground (red)
+radar.listen_debug_ground_remove()
 #use listen_debug() to show radar points (cameras see this points too)
-radar.listen_debug()
+#radar.listen_debug()
 #radar.listen()
 ###############################################################################
 #route planning
@@ -81,6 +85,7 @@ data = ([x[0].transform.location.x for x in route], [y[0].transform.location.y f
 ###############################################################################
 #main loop
 ###############################################################################
+
 def run():
 
     track_lead = Tracker(lead, route)
@@ -91,12 +96,13 @@ def run():
     time.sleep(2)
     ego.apply_control(carla.VehicleControl(throttle=throttle, steer=0))
     old_time = 0
-    lead_vel = 40
+    lead_vel = 80
     change_count = 0
+
     while True:
         # Carla Tick
         world.tick()
-        
+                
         new_time = time.time()
         fps = int(1/(new_time - old_time))
         old_time = new_time
@@ -112,6 +118,20 @@ def run():
         radar_data = radar.update()
         image = stereocam.update()
 
+        #print(radar_data)    [(lista[0],lista[1],lista[2]) for lista in radar_data]
+
+        clusters = Spherical_math.remove_ground(radar_data, RadarP.RADAR_HEIGHT, RadarP.GROUND_CORRECT_PERCENTAGE)
+        
+        clusters = Spherical_math.distance_cluster(clusters, 5) #distance
+        print("Clusters:")
+        for i, cluster in enumerate(clusters):
+            print(f"Cluster {i+1}: {cluster}")
+       
+        clusters = Spherical_math.remove_single_element_clusters(clusters)
+        print("Clusters elaborated:")
+        for i, cluster in enumerate(clusters):
+            print(f"--Cluster {i+1}: {cluster}")
+
         image = cv2.putText(
                             image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h' + "  fps: " + str(fps), (30, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX,
@@ -119,7 +139,6 @@ def run():
                             2, cv2.LINE_AA
                             )
         cv2.imshow('control view', image)
-        print(radar_data)
         change_count += 1
         if change_count == 300:
             change_count = 0

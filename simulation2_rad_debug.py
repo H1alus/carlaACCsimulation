@@ -9,6 +9,7 @@ from agents.navigation.global_route_planner import GlobalRoutePlanner
 import matplotlib.pyplot as plt
 from tracker import Tracker
 from stereoCamera import StereoCamera
+from sensorsP import RadarP
 from radar import Radar
 import random
 ###############################################################################
@@ -81,6 +82,7 @@ data = ([x[0].transform.location.x for x in route], [y[0].transform.location.y f
 ###############################################################################
 #main loop
 ###############################################################################
+
 def run():
 
     track_lead = Tracker(lead, route)
@@ -93,10 +95,15 @@ def run():
     old_time = 0
     lead_vel = 40
     change_count = 0
+    
+    plt.ion()
+    fig, ax = plt.subplots()
+    line, = ax.plot([], [])
+    
     while True:
         # Carla Tick
         world.tick()
-        
+                
         new_time = time.time()
         fps = int(1/(new_time - old_time))
         old_time = new_time
@@ -111,6 +118,21 @@ def run():
         
         radar_data = radar.update()
         image = stereocam.update()
+        
+        RX_power = [0]*int(RadarP.RANGE*1.5)
+        for temp_list in radar_data:
+            if temp_list:
+                RX_power[round(temp_list[0])]+=1   
+        RX_power = np.convolve(RX_power, np.ones(round(len(RX_power)/20))/round((len(RX_power)/20)), 'valid')
+        line.set_xdata(np.arange(len(RX_power)))
+        line.set_ydata(RX_power)
+        ax.relim()
+        ax.autoscale_view()
+        plt.pause(0.01)
+        time.sleep(0.01)    
+        print(RX_power)
+        
+        print(radar_data)
 
         image = cv2.putText(
                             image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h' + "  fps: " + str(fps), (30, 30), 
@@ -119,7 +141,6 @@ def run():
                             2, cv2.LINE_AA
                             )
         cv2.imshow('control view', image)
-        print(radar_data)
         change_count += 1
         if change_count == 300:
             change_count = 0
