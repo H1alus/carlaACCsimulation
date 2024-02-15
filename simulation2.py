@@ -62,8 +62,8 @@ cv2.namedWindow('control view',cv2.WINDOW_AUTOSIZE)
 ###############################################################################
 radar = Radar(world, ego)
 #use listen_debug() to show radar points (cameras see this points too)
-#radar.listen_debug()
-radar.listen()
+radar.listen_debug()
+#radar.listen()
 ###############################################################################
 #route planning
 ###############################################################################
@@ -119,7 +119,7 @@ def run():
                             2, cv2.LINE_AA
                             )
         cv2.imshow('control view', image)
-        #print(radar_data)
+        print(radar_data)
         change_count += 1
         if change_count == 300:
             change_count = 0

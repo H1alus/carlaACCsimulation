@@ -9,16 +9,9 @@ from agents.navigation.global_route_planner import GlobalRoutePlanner
 import matplotlib.pyplot as plt
 from tracker import Tracker
 from stereoCamera import StereoCamera
+from sensorsP import RadarP
 from radar import Radar
 import random
-from communication import connecter
-
-INPUT_THROTTLE_BRAKE = True
-
-###############################################################################
-# communication thread
-con = connecter(throtbrk=INPUT_THROTTLE_BRAKE)
-con.start()
 ###############################################################################
 #context
 ###############################################################################
@@ -70,8 +63,8 @@ cv2.namedWindow('control view',cv2.WINDOW_AUTOSIZE)
 ###############################################################################
 radar = Radar(world, ego)
 #use listen_debug() to show radar points (cameras see this points too)
-#radar.listen_debug()
-radar.listen()
+radar.listen_debug()
+#radar.listen()
 ###############################################################################
 #route planning
 ###############################################################################
@@ -89,33 +82,28 @@ data = ([x[0].transform.location.x for x in route], [y[0].transform.location.y f
 ###############################################################################
 #main loop
 ###############################################################################
+
 def run():
 
     track_lead = Tracker(lead, route)
     tracker = Tracker(ego, route)
     # we need initial speed for the auto-steering to be effective
-    throttle = 0
-    if not INPUT_THROTTLE_BRAKE:
-        vel = con.getVelocity()
-        while vel <=10:
-            vel = con.getVelocity()
-            time.sleep(0.05)
-        throttle,_ = tracker.desired_speed(vel)
-    else:
-        throttle, _ = con.getThrottleBrake()
-        while throttle <= 0.1:
-            throttle, _ = con.getThrottleBrake()
-            time.sleep(0.05)
-
+    throttle,_ = tracker.desired_speed(10)
     lead.apply_control(carla.VehicleControl(throttle=throttle, steer=0))
     time.sleep(2)
     ego.apply_control(carla.VehicleControl(throttle=throttle, steer=0))
     old_time = 0
     lead_vel = 40
     change_count = 0
+    
+    plt.ion()
+    fig, ax = plt.subplots()
+    line, = ax.plot([], [])
+    
     while True:
         # Carla Tick
         world.tick()
+                
         new_time = time.time()
         fps = int(1/(new_time - old_time))
         old_time = new_time
@@ -126,13 +114,26 @@ def run():
         v = np.array([v.x, v.y, v.z])
         v = np.sqrt(v.dot(v))*3.6
         angle = tracker.keepTrack()
-        if INPUT_THROTTLE_BRAKE:
-            throttle, brake = con.getThrottleBrake()
-        else:
-            throttle, brake = tracker.desired_speed(con.getVelocity())
+        throttle, brake = tracker.desired_speed(100)
+        
         radar_data = radar.update()
         image = stereocam.update()
-        con.sendData(v, image, radar_data)
+        
+        RX_power = [0]*int(RadarP.RANGE*1.5)
+        for temp_list in radar_data:
+            if temp_list:
+                RX_power[round(temp_list[0])]+=1   
+        RX_power = np.convolve(RX_power, np.ones(round(len(RX_power)/20))/round((len(RX_power)/20)), 'valid')
+        line.set_xdata(np.arange(len(RX_power)))
+        line.set_ydata(RX_power)
+        ax.relim()
+        ax.autoscale_view()
+        plt.pause(0.01)
+        time.sleep(0.01)    
+        print(RX_power)
+        
+        print(radar_data)
+
         image = cv2.putText(
                             image, 'Speed: ' + str(int(np.ceil(v))) + ' Km/h' + "  fps: " + str(fps), (30, 30), 
                             cv2.FONT_HERSHEY_SIMPLEX,
@@ -140,7 +141,6 @@ def run():
                             2, cv2.LINE_AA
                             )
         cv2.imshow('control view', image)
-        #print(radar_data)
         change_count += 1
         if change_count == 300:
             change_count = 0
@@ -150,7 +150,6 @@ def run():
         throttle_lead, brake_lead = track_lead.desired_speed(lead_vel)
         lead.apply_control(carla.VehicleControl(throttle=throttle_lead, steer=angle_lead, brake=brake_lead))
         ego.apply_control(carla.VehicleControl(throttle=throttle, steer=angle, brake=brake))
-        time.sleep(0.01)
 
 if __name__ == "__main__":
     run()
