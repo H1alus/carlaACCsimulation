@@ -7,10 +7,11 @@ import numpy as np
 import base64
 from PIL import Image
 import time
+import struct
 
 
 class connecter(threading.Thread):
-    def __init__(self):
+    def __init__(self, throtbrk=False):
         super().__init__()
         self.serv_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_address = ("0.0.0.0", 4090)
@@ -18,7 +19,8 @@ class connecter(threading.Thread):
         self._senderQueue = Queue()
         self._recvQueue = Queue()
         self._heldVelocity = 0
-
+        self._heldthrotbrk = {"t": 0, "b": 0}
+        self.throtbrk = throtbrk
         self.sendDataEvent = threading.Event()
 
     def waitConnection(self):
@@ -36,6 +38,10 @@ class connecter(threading.Thread):
             self._heldVelocity = self._recvQueue.get()
         return self._heldVelocity
 
+    def getThrottleBrake(self):
+        if not self._recvQueue.empty():
+            self._heldthrotbrk = self._recvQueue.get()
+        return (self._heldthrotbrk["t"], self._heldthrotbrk["b"])
 
     def sender(self):
         while True:
@@ -52,18 +58,36 @@ class connecter(threading.Thread):
             self.sendDataEvent.clear()
             time.sleep(0.020)
 
-    def receiver(self):
+    def receiver_vel(self):
         while True:
             data = self.connection.recv(4)
             self._recvQueue.put(int.from_bytes(data, byteorder="big"))
             time.sleep(0.025)
+    
+    def receiver_throtbrk(self):
+        while True:
+            to_read = self.connection.recv(4)
+            data_length = int.from_bytes(to_read, byteorder="big")
+
+            data = b''
+            while len(data) < data_length:
+                packet = self.connection.recv(min(data_length - len(data), 4096))
+                if not packet:
+                    raise RuntimeError("connection is broken")
+                data += packet
             
+            decoded = json.loads(data.decode("utf-8"))
+            self._recvQueue.put(decoded)
+
     def run(self):
         self.waitConnection()
         self._senderQueue.queue.clear()
         
         sndr = threading.Thread(target=self.sender)
-        rcvr = threading.Thread(target=self.receiver)
+        if not self.throtbrk:
+            rcvr = threading.Thread(target=self.receiver_vel)
+        else:
+            rcvr = threading.Thread(target=self.receiver_throtbrk)
         sndr.start()
         rcvr.start()
         sndr.join()

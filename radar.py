@@ -13,7 +13,7 @@ class Radar:
     def __init__(self, world, ego):
         self.world = world
         radar_bp = world.get_blueprint_library().find("sensor.other.radar")
-        radar_bp.set_attribute('horizontal_fov', str(RadarP.HORIZZONTAL_FOV))
+        radar_bp.set_attribute('horizontal_fov', str(RadarP.HORIZONTAL_FOV))
         radar_bp.set_attribute('vertical_fov', str(RadarP.VERTICAL_FOV))
         radar_bp.set_attribute('range', str(RadarP.RANGE)) 
         radar_bp.set_attribute("points_per_second", str(RadarP.POINTS_PER_SECOND))

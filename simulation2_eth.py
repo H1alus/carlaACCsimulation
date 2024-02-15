@@ -12,9 +12,12 @@ from stereoCamera import StereoCamera
 from radar import Radar
 import random
 from communication import connecter
+
+INPUT_THROTTLE_BRAKE = True
+
 ###############################################################################
 # communication thread
-con = connecter()
+con = connecter(throtbrk=INPUT_THROTTLE_BRAKE)
 con.start()
 ###############################################################################
 #context
@@ -91,11 +94,19 @@ def run():
     track_lead = Tracker(lead, route)
     tracker = Tracker(ego, route)
     # we need initial speed for the auto-steering to be effective
-    vel = con.getVelocity()
-    while vel <=10:
+    throttle = 0
+    if not INPUT_THROTTLE_BRAKE:
         vel = con.getVelocity()
-        time.sleep(0.05)
-    throttle,_ = tracker.desired_speed(vel)
+        while vel <=10:
+            vel = con.getVelocity()
+            time.sleep(0.05)
+        throttle,_ = tracker.desired_speed(vel)
+    else:
+        throttle, _ = con.getThrottleBrake()
+        while throttle <= 0.1:
+            throttle, _ = con.getThrottleBrake()
+            time.sleep(0.05)
+
     lead.apply_control(carla.VehicleControl(throttle=throttle, steer=0))
     time.sleep(2)
     ego.apply_control(carla.VehicleControl(throttle=throttle, steer=0))
@@ -115,8 +126,10 @@ def run():
         v = np.array([v.x, v.y, v.z])
         v = np.sqrt(v.dot(v))*3.6
         angle = tracker.keepTrack()
-        throttle, brake = tracker.desired_speed(con.getVelocity())
-        
+        if INPUT_THROTTLE_BRAKE:
+            throttle, brake = con.getThrottleBrake()
+        else:
+            throttle, brake = tracker.desired_speed(con.getVelocity())
         radar_data = radar.update()
         image = stereocam.update()
         con.sendData(v, image, radar_data)
